@@ -32,8 +32,9 @@ proc getIPv6Netaddr {ipv6addr} {
                 lappend buf $i
             }
         }
+        set ipv6addr $buf
     }
-    return "[join [lrange $buf 0 3] {:}]"
+    return "[join [lrange $ipv6addr 0 3] {:}]:"
 }
 
 proc findNetworkAddresses {} {
@@ -79,6 +80,7 @@ proc findNetworkAddresses {} {
                 puts stderr "Does not support prefixlen: $prefixlen"
                 exit 1
             }
+            puts "DEBUG: $ipv6netaddr"
             set ipv6netaddr [getIPv6Netaddr $ipv6netaddr]
         }
         Linux {
@@ -130,7 +132,7 @@ proc findNetworkAddresses {} {
 
 findNetworkAddresses
 
-puts "ipv4netaddr=$ipv6netaddr"
+puts "ipv4netaddr=$ipv4netaddr"
 puts "netmask=$netmask"
 puts "broadcast=$broadcast"
 puts "ipv6netaddr=$ipv6netaddr"
