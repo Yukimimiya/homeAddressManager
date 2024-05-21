@@ -115,7 +115,7 @@ proc findNetworkAddresses {} {
                 puts stderr "Can not parse ip a output: $err"
                 exit 1
             }
-            if {![regexp {\s+inet6 ([0-9A-Fa-f]{1,4}([:]{1,2}[0-9A-Fa-f]{1,4}){1,7}) prefixlen ([0-9]+)\s} $err _ ipv6netaddr _ prefixlen]} {
+            if {![regexp {\s+inet6 ([0-9A-Fa-f]{1,4}([:]{1,2}[0-9A-Fa-f]{1,4}){1,7})/([0-9]+)\s} $err _ ipv6netaddr _ prefixlen]} {
                 puts stderr "Can not parse ifconfig output: $err"
                 exit 1
             }
