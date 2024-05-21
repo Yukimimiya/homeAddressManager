@@ -22,10 +22,10 @@ proc usage {} {
 proc getIPv6Netaddr {ipv6addr} {
     set ipv6addr [split $ipv6addr {:}]
     set buf {}
-    if {[llength $ipv6netaddr] != 8} {
-        foreach i $ipv6netaddr {
+    if {[llength $ipv6addr] != 8} {
+        foreach i $ipv6addr {
             if {[string equal {} $i]} {
-                for {set j} {$j < [expr 8 - [llength $ipv6netaddr]]} {incr j} {
+                for {set j} {$j < [expr 8 - [llength $ipv6addr]]} {incr j} {
                     lappend buf "0000"
                 }
             } else {
@@ -33,7 +33,7 @@ proc getIPv6Netaddr {ipv6addr} {
             }
         }
     }
-    set ipv6netaddr "[join [lrange $buf 0 3] {:}]"
+    return "[join [lrange $buf 0 3] {:}]"
 }
 
 proc findNetworkAddresses {} {
