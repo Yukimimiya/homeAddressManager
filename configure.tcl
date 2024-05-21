@@ -86,7 +86,7 @@ proc findNetworkAddresses {} {
                 puts stderr "Can not parse ip a output: $err"
                 exit 1
             }
-            if {![regexp {\s+inet ([0-9]{1,3}(\.[0-9]{1.3}){1,3})/([12][0-9]) brd ([0-9]{1,3}(\.[0-9]){1,3})\s} $err _ ipv4netaddr _ prefix broadcast]} {
+            if {![regexp {\s+inet ([0-9]{1,3}(\.[0-9]{1,3}){3})/([12][0-9]) brd ([0-9]{1,3}(\.[0-9]{1,3}){3})\s} $err _ ipv4netaddr _ prefix broadcast]} {
                 puts stderr "Can not parse ifconfig output: $err"
                 exit 1
             }
@@ -115,7 +115,7 @@ proc findNetworkAddresses {} {
                 puts stderr "Can not parse ip a output: $err"
                 exit 1
             }
-            if {![regexp {\s+inet6 ([0-9A-Fa-f]{1,4}([:]{1,2}[0-9A-Fa-f]){1,4}) prefixlen ([0-9]+)\s} $err _ ipv6netaddr prefixlen]} {
+            if {![regexp {\s+inet6 ([0-9A-Fa-f]{1,4}([:]{1,2}[0-9A-Fa-f]{1,4}){1,7}) prefixlen ([0-9]+)\s} $err _ ipv6netaddr _ prefixlen]} {
                 puts stderr "Can not parse ifconfig output: $err"
                 exit 1
             }
