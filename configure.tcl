@@ -252,7 +252,7 @@ proc findDomainname {} {
             if {[catch [list exec resolvectl status | grep {DNS Domain:}] domain]} {
                 puts stderr " Can not get DNS Domain from resolvectl status: $domain"
             } else {
-                set domain [lindex [split [regsub -all -line -- {^\s+} $domain]] 2]
+                set domain [lindex [split [regsub -all -line -- {^\s+} $domain {}]] 2]
             }
         }
         default {
