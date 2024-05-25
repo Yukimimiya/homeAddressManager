@@ -300,11 +300,12 @@ proc findDNSServers {} {
                     puts stderr "Can not find DNS servers from resolvectl status"
                     exit 1
                 }
-                set domainservers $buf
+                set dnsservers $buf
             }
         }
         default {
             puts stderr "Unsupported OS: $tcl_platform(os)"
+            exit 1
         }
     }
     return [join $dnsservers {, }]
