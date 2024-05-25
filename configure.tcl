@@ -326,7 +326,7 @@ proc findIPv4Defaultroute {} {
             set ipv4defaultroute [lindex [lsort -unique $buf] 0]
         }
         Linux {
-            if {[catch [list exec ip route | egrep {^default}] $ipv4defaultroute] || \
+            if {[catch [list exec ip route | egrep {^default}] ipv4defaultroute] || \
                 ![regexp {^default via (^[0-9]{1,3}(.[0-9]{1,3}){3})} $ipv4defaultroute _ $ipv4frfaultroute _]} {
                 puts stderr "Can not find default route from ip route: $ipv4defaultroute"
                 exit 1
