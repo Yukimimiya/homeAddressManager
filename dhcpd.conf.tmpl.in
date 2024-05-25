@@ -109,7 +109,7 @@ option domain-name-servers %DNSSERVERS%
 
 subnet %IPV4NETWORKADDR% netmask %NETMASK% {
   range %IPV4RANGESTART% %IPV4RANGEEND%
-  option broadcast-address %IPV4BADCAST%;
+  option broadcast-address %IPV4BRDCAST%;
   option routers %IPV4DEFAULTROUTER%
 }
 
