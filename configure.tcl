@@ -291,7 +291,7 @@ proc findDNSServers {} {
                 puts stderr "Can not find DNS servers from resolvectl status: $dnsservers"
             } else {
                 set buf {}
-                foreach i [split [regsub -all -line -- {^\s+DNS Servers: } $dnsservers]] {
+                foreach i [split [regsub -all -line -- {^\s+DNS Servers: } $dnsservers {}]] {
                     if {[regexp {^[0-9]{1,3}(\.[0-9]{1,3}){3}$} $i]} {
                         lappend buf $i
                     }
