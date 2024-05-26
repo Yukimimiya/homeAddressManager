@@ -275,7 +275,7 @@ proc findDNSServers {} {
             } else {
                 set buf {}
                 foreach i [split [regsub -all -line -- {^nameserver } $dnsservers {}]] {
-                    if {[regexp {^[0-9]{1,3}(\.[0-9]{1,3}){3}$} $i]} {
+                    if {[regexp {^(([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$} $i]} {
                         lappend buf $i
                     }
                 }
@@ -292,7 +292,7 @@ proc findDNSServers {} {
             } else {
                 set buf {}
                 foreach i [split [regsub -all -line -- {^\s+DNS Servers: } $dnsservers {}]] {
-                    if {[regexp {^[0-9]{1,3}(\.[0-9]{1,3}){3}$} $i]} {
+                    if {[regexp {^(([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$} $i]} {
                         lappend buf $i
                     }
                 }
@@ -328,7 +328,7 @@ proc findIPv4Defaultroute {} {
         }
         Linux {
             if {[catch [list exec ip route | egrep {^default}] ipv4defaultroute] || \
-                ![regexp {^default via ([0-9]{1,3}(.[0-9]{1,3}){3})} $ipv4defaultroute _ ipv4defaultroute _]} {
+                ![regexp {^default via ((([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))} $ipv4defaultroute _ ipv4defaultroute _]} {
                 puts stderr "Can not find default route from ip route: $ipv4defaultroute"
                 exit 1
             }
