@@ -46,7 +46,7 @@ proc findIPv4NetworkAddresses {} {
                 puts stderr $err
                 exit 1
             }
-            if {![regexp {\s+inet ((([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])) netmask 0x([f0]{8}) broadcast ((([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))} $err _ ipv4netaddr _ _ _ netmask _]} {
+            if {![regexp {\s+inet ((([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])) netmask 0x([f0]{8}) broadcast} $err _ ipv4netaddr _ _ _ netmask]} {
                 puts stderr "Can not parse ifconfig output: $err"
                 exit 1
             }
@@ -107,7 +107,7 @@ proc findIPv4Netmask {} {
                 puts stderr $err
                 exit 1
             }
-            if {![regexp {\s+inet ((([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])) netmask 0x([f0]{8}) broadcast ((([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))} $err _ _ _ _ _ netmask _]} {
+            if {![regexp {\s+inet .+ netmask 0x([f0]{8}) broadcast} $err _ netmask]} {
                 puts stderr "Can not parse ifconfig output: $err"
                 exit 1
             }
@@ -132,11 +132,10 @@ proc findIPv4Netmask {} {
                 puts stderr "Can not parse ip a output: $err"
                 exit 1
             }
-            if {![regexp {\s+inet ((([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))/(8|16|24) brd ((([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\s} $err _ _ _ _ _ prefix _]} {
+            if {![regexp {\s+inet .+/(8|16|24) brd\s} $err _ prefix]} {
                 puts stderr "Can not parse ifconfig output: $err"
                 exit 1
             }
-            puts "DBUG: $prefix"
             switch $prefix {
                 8 {
                     set netmask 255.0.0.0
@@ -169,7 +168,7 @@ proc findIPv4Broadcast {} {
                 puts stderr $err
                 exit 1
             }
-            if {![regexp {\s+inet ([0-9]{1,3}(\.[0-9]{1,3}){3}) netmask 0x([f0]{8}) broadcast ([0-9]{1,3}(\.[0-9]{1,3}){3})} $err _ _ _ _ broadcast]} {
+            if {![regexp {\s+inet .+ broadcast ((([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))} $err _  broadcast]} {
                 puts stderr "Can not parse ifconfig output: $err"
                 exit 1
             }
@@ -179,7 +178,7 @@ proc findIPv4Broadcast {} {
                 puts stderr "Can not parse ip a output: $err"
                 exit 1
             }
-            if {![regexp {\s+inet ([0-9]{1,3}(\.[0-9]{1,3}){3})/([12][0-9]) brd ([0-9]{1,3}(\.[0-9]{1,3}){3})\s} $err _ ipv4netaddr _ prefix broadcast]} {
+            if {![regexp {\s+inet .+ brd ((([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\s} $err _ broadcast]} {
                 puts stderr "Can not parse ifconfig output: $err"
                 exit 1
             }
