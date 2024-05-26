@@ -5,7 +5,7 @@
 
 # option definitions common to all supported networks...
 option domain-name "%DOMAINNAME%";
-option domain-name-servers %DNSSERVERS%
+option domain-name-servers %DNSSERVERS%;
 
 # default-lease-time 600;
 # max-lease-time 7200;
@@ -108,9 +108,9 @@ option domain-name-servers %DNSSERVERS%
 #}
 
 subnet %IPV4NETWORKADDR% netmask %NETMASK% {
-  range %IPV4RANGESTART% %IPV4RANGEEND%
+  range %IPV4RANGESTART% %IPV4RANGEEND%;
   option broadcast-address %IPV4BRDCAST%;
-  option routers %IPV4DEFAULTROUTER%
+  option routers %IPV4DEFAULTROUTER%;
 }
 
 # Fixed IP Addresses

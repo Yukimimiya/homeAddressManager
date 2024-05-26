@@ -7,6 +7,9 @@ if type tclsh > /dev/null 2>&1 ; then exec tclsh "$0" ${1+"$@"} ; fi
 echo "This software requires Tcl/Tk 8.6 to run." ; \
 exit 1
 
+# settings
+set dhcpTemplateFileIn  dhcpd.conf.tmpl.in
+
 proc usage {} {
     global argv0
     puts stderr "$argv0 \\"
@@ -457,4 +460,32 @@ lappend dict [list {%IPV4RANGEEND%} $ipv4RangeEnd]
 lappend dict [list {%IPV4BRDCAST%} $ipv4BroadCast]
 lappend dict [list {%IPV4DEFAULTROUTER%} $ipv4DefaultRouter]
 
-puts stdout "DEBUG: $dict"
+# generate DHCP Configuration Template
+set dhcpTemplateFile [regsub {\.in$} $dhcpTemplateFileIn {}]
+
+if {[catch [list open $dhcpTemplateFileIn r] in]} {
+    puts stderr $in
+    exit 1
+}
+if {[catch [list open $dhcpTemplateFile w] out]} {
+    puts stderr $out
+    exit 1
+}
+
+while {![eof $in]} {
+    set line [gets $in]
+    foreach i $dict {
+        set line [regsub [lindex $i 0] $line [lindex $i 1]]
+    }
+    puts $out $line
+}
+
+if {[catch [list close $out] err]} {
+    puts stderr $err
+    exit 1
+}
+if {[catch [list close $in] err]} {
+    puts stderr $err
+    exit 1
+}
+
