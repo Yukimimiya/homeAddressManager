@@ -136,6 +136,7 @@ proc findIPv4Netmask {} {
                 puts stderr "Can not parse ifconfig output: $err"
                 exit 1
             }
+            puts "DBUG: $prefix"
             switch $prefix {
                 8 {
                     set netmask 255.0.0.0
