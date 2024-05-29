@@ -352,6 +352,43 @@ proc findIPv4Defaultroute {} {
     return $ipv4defaultroute
 }
 
+proc determinRevZoneName {ipv4NetAddr} {
+    switch -regexp -- $ipv4NetAddr {
+        10\..+ {
+            set revZone {10.in-addr.arpa}
+        }
+        172\.(1[6-9]|2[0-9]|3[0-1])\..+ {
+            set addr [split $ipv4NetAddr {.}]
+            set revZone "[lindex $addr 1].[lindex $addr 0].in-addr.arpa"
+        }
+        192\.168\..+ {
+            set revZone {168.192.in-addr.arpa}
+        }
+        default {
+            puts stderr "Does not support global address: $ipv4NetAddr"
+            exit 1
+        }
+    }
+}
+
+proc findMName {zone} {
+    if {[catch [list exec dig $zone soa | egrep -v {^;|^$}] soa]} {
+        puts stderr "Can not get soa record: $soa"
+        exit 1
+    }
+    set soa [split [regsub -all -- {\s+} $soa { }]]
+    return [lindex $soa 4]
+}
+
+proc findRName {zone} {
+    if {[catch [list exec dig $zone soa | egrep -v {^;|^$}] soa]} {
+        puts stderr "Can not get soa record: $soa"
+        exit 1
+    }
+    set soa [split [regsub -all -- {\s+} $soa { }]]
+    return [lindex $soa 5]
+}
+
 set domainName {}
 set dnsServers {}
 set ipv4NetAddr {}
@@ -360,6 +397,9 @@ set ipv4RangeStart {}
 set ipv4RangeEnd {}
 set ipv4BroadCast {}
 set ipv4DefaultRouter {}
+set revZoneName {}
+set mName {}
+set rName {}
 
 # parse options
 foreach i $argv {
@@ -416,6 +456,18 @@ foreach i $argv {
                 exit 1
             }
         }
+        --dnsMName=* {
+            if {![regexp {^--dnsMName=(.+)$} $i _ mName]} {
+                puts stderr "No DNS MName: $i"
+                exit 1
+            }
+        }
+        --dnsRName=* {
+            if {![regexp {^--dnsRName=(.+)$} $i _ rName]} {
+                puts stderr "No DNS RName: $i"
+                exit 1
+            }
+        }
         default {
             puts stderr "Unknown option: %i"
             exit $i
@@ -448,7 +500,15 @@ if {[string equal {} $ipv4BroadCast]} {
 if {[string equal {} $ipv4DefaultRouter]} {
     set ipv4DefaultRouter [findIPv4Defaultroute ]
 }
-
+if {[string equal {} $revZoneName]} {
+    set revZoneName [determinRevZoneName $ipv4NetAddr]
+}
+if {[string equal {} $mName]} {
+    set mName [findMName $domainName]
+}
+if {[string equal {} $rName]} {
+    set rName [findRName $domainName]
+}
 # make dictionary
 set dict {}
 lappend dict [list {%DOMAINNAME%} $domainName]
@@ -459,6 +519,9 @@ lappend dict [list {%IPV4RANGESTART%} $ipv4RangeStart]
 lappend dict [list {%IPV4RANGEEND%} $ipv4RangeEnd]
 lappend dict [list {%IPV4BRDCAST%} $ipv4BroadCast]
 lappend dict [list {%IPV4DEFAULTROUTER%} $ipv4DefaultRouter]
+lappend dict [list {%REVZONENAME%} $revZoneName]
+lappend dict [list {%MNAME%} $mName]
+lappend dict [list {%RNAME%} $rName]
 
 # generate DHCP Configuration Template
 set dhcpTemplateFile [regsub {\.in$} $dhcpTemplateFileIn {}]

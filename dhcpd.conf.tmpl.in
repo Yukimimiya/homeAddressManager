@@ -114,4 +114,4 @@ subnet %IPV4NETWORKADDR% netmask %NETMASK% {
 }
 
 # Fixed IP Addresses
-%%FIXDADDRESSES%%
+%%FIXDHCPADDRESSES%%
