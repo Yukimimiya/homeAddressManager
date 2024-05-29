@@ -1,0 +1,38 @@
+$TTL    3h
+$ORIGIN 10.in-addr.arpa.
+
+@       IN SOA  tcltk.jp. dns.tcltk.jp. 2024051117 3600 1200 1209600 900
+
+@       IN NS   dns00.tcltk.jp.
+@       IN NS   dns01.tcltk.jp.
+
+14.1.0      IN PTR  dns00.tcltk.jp.
+13.1.0      IN PTR  dns01.tcltk.jp.
+4.1.0       IN PTR  fs.tcltk.jp.
+9.1.0       IN PTR  nas.tcltk.jp.
+
+120.1.0 IN PTR  BRNB422006EEE69.tcltk.jp.
+121.1.0 IN PTR  Natumoca.tcltk.jp.
+124.1.0 IN PTR  ServUO.tcltk.jp.
+125.1.0 IN PTR  hoya-test.tcltk.jp.
+126.1.0 IN PTR  ubuntu-2404.tcltk.jp.
+122.1.0 IN PTR  git.tcltk.jp.
+134.1.0 IN PTR  aarch64-maker.tcltk.jp.
+140.1.0 IN PTR  amd64-maker.tcltk.jp.
+241.1.0 IN PTR  easyway-test.tcltk.jp.
+242.1.0 IN PTR  test-client.tcltk.jp.
+192.1.0 IN PTR  testBSD.tcltk.jp.
+193.1.0 IN PTR  take-Mac-wifi.tcltk.jp.
+194.1.0 IN PTR  take-Mac.tcltk.jp.
+199.1.0 IN PTR  book.tcltk.jp.
+195.1.0 IN PTR  ubuntu.tcltk.jp.
+196.1.0 IN PTR  ubuntu2.tcltk.jp.
+200.1.0 IN PTR  arty.tcltk.jp.
+201.1.0 IN PTR  RPI-1.tcltk.jp.
+202.1.0 IN PTR  RPI-b.tcltk.jp.
+203.1.0 IN PTR  charlot-mac.tcltk.jp.
+204.1.0 IN PTR  charlot-macmini-wifi.tcltk.jp.
+205.1.0 IN PTR  vm-freebsd.tcltk.jp.
+206.1.0 IN PTR  ark-macair.tcltk.jp.
+207.1.0 IN PTR  RPI3.tcltk.jp.
+208.1.0 IN PTR  felicia-macmini.tcltk.jp.
