@@ -389,6 +389,19 @@ proc findRName {zone} {
     return [lindex $soa 5]
 }
 
+proc findNSRecords {zone} {
+    if {[catch [list exec dig $zone ns | egrep -v {^;|^$} | egrep {IN\s+NS\s}] ns]} {
+        puts stderr "Can not get ns record: $ns"
+        exit 1
+    }
+    set buf {}
+    foreach i [split $ns "\n"] {
+        lappend buf [concat {@} [lrange [split [regsub -all -- {\s+} $i { }]] 2 end]]
+    }
+    return [join $buf "\n"]
+}
+
+
 set domainName {}
 set dnsServers {}
 set ipv4NetAddr {}
@@ -400,6 +413,7 @@ set ipv4DefaultRouter {}
 set revZoneName {}
 set mName {}
 set rName {}
+set nsRecords {}
 
 # parse options
 foreach i $argv {
@@ -468,6 +482,12 @@ foreach i $argv {
                 exit 1
             }
         }
+        --nsResords=* {
+            if {![regexp {^--nsRecords=(.+)$} $i _ nsRecords]} {
+                puts stderr "No NS Records: $i"
+                exit 1
+            }
+        }
         default {
             puts stderr "Unknown option: %i"
             exit $i
@@ -509,6 +529,9 @@ if {[string equal {} $mName]} {
 if {[string equal {} $rName]} {
     set rName [findRName $domainName]
 }
+if {[string equal {} $nsRecords]} {
+    set nsRecords [findNSRecords $domainName]
+}
 # make dictionary
 set dict {}
 lappend dict [list {%DOMAINNAME%} $domainName]
@@ -522,33 +545,32 @@ lappend dict [list {%IPV4DEFAULTROUTER%} $ipv4DefaultRouter]
 lappend dict [list {%REVZONENAME%} $revZoneName]
 lappend dict [list {%MNAME%} $mName]
 lappend dict [list {%RNAME%} $rName]
+lappend dict [list {%NSRECORDS%} $nsRecords]
 
-# generate DHCP Configuration Template
-set dhcpTemplateFile [regsub {\.in$} $dhcpTemplateFileIn {}]
-
-if {[catch [list open $dhcpTemplateFileIn r] in]} {
-    puts stderr $in
-    exit 1
-}
-if {[catch [list open $dhcpTemplateFile w] out]} {
-    puts stderr $out
-    exit 1
-}
-
-while {![eof $in]} {
-    set line [gets $in]
-    foreach i $dict {
-        set line [regsub [lindex $i 0] $line [lindex $i 1]]
+# generate Template Files
+foreach inFile [glob -nocomplain -- {*.in}] {
+    set outFile [file rootname $inFile]
+    if {[catch [list open $inFile r] in]} {
+        puts stderr $in
+        exit 1
     }
-    puts $out $line
+    if {[catch [list open $outFile w] out]} {
+        puts stderr $out
+        exit 1
+    }
+    while {![eof $in]} {
+        set line [gets $in]
+        foreach i $dict {
+            set line [regsub [lindex $i 0] $line [lindex $i 1]]
+        }
+        puts $out $line
+    }
+    if {[catch [list close $out] err]} {
+        puts stderr $err
+        exit 1
+    }
+    if {[catch [list close $in] err]} {
+        puts stderr $err
+        exit 1
+    }
 }
-
-if {[catch [list close $out] err]} {
-    puts stderr $err
-    exit 1
-}
-if {[catch [list close $in] err]} {
-    puts stderr $err
-    exit 1
-}
-
