@@ -229,9 +229,28 @@ proc findIPv6NetworkAddresses {} {
         }
         default {
             puts stderr "Unsupported OS: $tcl_platform(os)"
+            exit 1
         }
     }
-}    
+    return $ipv6netaddr
+}
+
+proc lreverse {l} {
+    set ret {}
+    for {set i [expr [llength $l] - 1]} {$i >= 0} {incr i -1} {
+        lappend ret [lindex $l $i]
+    }
+    return $ret
+}
+
+proc determinIPv6RevZoneName {ipv6netaddr} {
+    set ipv6netaddr [split [regsub {:$} $ipv6netaddr {}] {:}]
+    set ret {}
+    for {set i 3} {$i >= 0} {incr i -1} {
+        set ret [concat $ret [lreverse [split [format {%04x} 0x[lindex $ipv6netaddr $i]] {}]]]
+    }
+    return "[join $ret {.}].ip6.arpa"
+}
 
 proc findDomainname {} {
     global tcl_platform
@@ -352,7 +371,7 @@ proc findIPv4Defaultroute {} {
     return $ipv4defaultroute
 }
 
-proc determinRevZoneName {ipv4NetAddr} {
+proc determinIPv4RevZoneName {ipv4NetAddr} {
     switch -regexp -- $ipv4NetAddr {
         10\..+ {
             set revZone {10.in-addr.arpa}
@@ -410,10 +429,12 @@ set ipv4RangeStart {}
 set ipv4RangeEnd {}
 set ipv4BroadCast {}
 set ipv4DefaultRouter {}
-set revZoneName {}
+set ipv4RevZoneName {}
 set mName {}
 set rName {}
 set nsRecords {}
+set ipv6NetAddr {}
+set ipv6RevZoneName {}
 
 # parse options
 foreach i $argv {
@@ -488,6 +509,12 @@ foreach i $argv {
                 exit 1
             }
         }
+        --ipv6NetAddr=* {
+            if {![regexp {^--ipv6NetAddr=(.+)$} $i _ ipv6NetAddr]} {
+                puts stderr "No IPv6 Network Address: $i"
+                exit 1
+            }
+        }
         default {
             puts stderr "Unknown option: %i"
             exit $i
@@ -520,8 +547,8 @@ if {[string equal {} $ipv4BroadCast]} {
 if {[string equal {} $ipv4DefaultRouter]} {
     set ipv4DefaultRouter [findIPv4Defaultroute ]
 }
-if {[string equal {} $revZoneName]} {
-    set revZoneName [determinRevZoneName $ipv4NetAddr]
+if {[string equal {} $ipv4RevZoneName]} {
+    set revZoneName [determinIPv4RevZoneName $ipv4NetAddr]
 }
 if {[string equal {} $mName]} {
     set mName [findMName $domainName]
@@ -531,6 +558,12 @@ if {[string equal {} $rName]} {
 }
 if {[string equal {} $nsRecords]} {
     set nsRecords [findNSRecords $domainName]
+}
+if {[string equal {} $ipv6NetAddr]} {
+    set ipv6NetAddr [findIPv6NetworkAddress]
+}
+if {[string equal {} $ipv6RevZoneName]} {
+    set ipv6RevZoneName [determinIPv6RevZoneName $ipv6NetAddr]
 }
 # make dictionary
 set dict {}
@@ -542,10 +575,12 @@ lappend dict [list {%IPV4RANGESTART%} $ipv4RangeStart]
 lappend dict [list {%IPV4RANGEEND%} $ipv4RangeEnd]
 lappend dict [list {%IPV4BRDCAST%} $ipv4BroadCast]
 lappend dict [list {%IPV4DEFAULTROUTER%} $ipv4DefaultRouter]
-lappend dict [list {%REVZONENAME%} $revZoneName]
+lappend dict [list {%IPV4REVZONENAME%} $ipv4RevZoneName]
 lappend dict [list {%MNAME%} $mName]
 lappend dict [list {%RNAME%} $rName]
 lappend dict [list {%NSRECORDS%} $nsRecords]
+lappend dict [list {%IPV6NADDR%} $ipv6NetAddr]
+lappend dict [list {%IPV6REVZONENAME%} $ipv6RevZoneName]
 
 # generate Template Files
 foreach inFile [glob -nocomplain -- {*.in}] {

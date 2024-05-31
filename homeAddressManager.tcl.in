@@ -32,6 +32,22 @@ exit 1
 #  --class=A|B|C
 #   IPv4アドレスのクラス。A(/8)、B(/16)、C(/24)。デフォルトC
 
+# configurations
+set domainName {%DOMAINNAME%}
+set dnsServers {%DNSSERVERS%}
+set ipv4NetAddr {%IPV4NETWORKADDR%}
+set netMask {%NETMASK%}
+set ipv4RangeStart {%IPV4RANGESTART%}
+set ipv4RangeEnd {%IPV4RANGEEND%}
+set ipv4BroadCast {%IPV4BRDCAST%}
+set ipv4DefaultRouter {%IPV4DEFAULTROUTER%}
+set ipv4RevZoneName {%IPV4REVZONENAME%}
+set mName {%MNAME%}
+set rName {%RNAME%}
+set nsRecords {%NSRECORDS%}
+set ipv6NetAddr {%IPV6NADDR%}
+set ipv6RevZoneName {%IPV6REVZONENAME%}
+
 # genEUI64 macaddr -
 # 概要: eui64形式でIPv6のインタフェースID部分64bitを生成する
 # 引数:
@@ -186,35 +202,63 @@ proc genDHCPConf {templatePath csvFile configFile} {
 # proc genDNSForwardFile -
 # 概要: ISC Bind用の正引きゾーンファイルを生成する
 proc genDNSForwardFile {templatePath csvFile configFile} {
-
+    set templFile [file join $templatePath "[lindex [file split $configFile] end]".tmpl]
+    if {[catch [list open $templFile r] templ]} {
+        puts stderr $templ
+        exit 1
+    }
+    if {[catch [list open $csvFile r] csv]} {
+        puts stderr $csv
+        exit 1
+    }
+    if {[catch [list open $configFile w] config]} {
+        puts stderr $config
+        exit 1
+    }
+    while {![eof $templ]} {
+        set line [gets $templ]
+        if {[string equal {%%FIXDADDRESSRCODES%%} $line]} {
+            while {![eof $csv]} {
+                set data [gets $csv]
+                if {[regexp {^#} $data]} {
+                    continue
+                }
+                set data [split $data {,}]
+                if {4 == [llength $data]} {
+                    set host [lindex [split [lindex $data 3] {@}] 1]
+                    set ipv6addr [lindex $data 2]
+                } else {
+                    set host [lindex [split [lindex $data 2] {@}] 1]
+                    set ipv6addr {}
+                }
+                set ipv4addr [lindex $data 1]
+                if {[string equal {} $host] || [string equal {} $ipv4addr]} {
+                    continue
+                }
+                puts $config "$host\tIN A\t$ipv4addr"
+                if {![string equal P{ $ipv6addr}]} {
+                    puts $config "$host\tIN AAAA\t$ipv6addr"
+                }
+            }
+        } else {
+            puts $config $line
+        }
+    }
+    if {[catch [list close $config] err]} {
+        puts stderr $err
+        exit 1
+    }
+    if {[catch [list close $csv] err]} {
+        puts stderr $err
+        exit 1
+    }
+    if {[catch [list close $templ] err]} {
+        puts stderr $templ
+        exit 1
+    }
 }
 
-
-proc genNamedConf {fp1 fp2 line class domain ipv6network]} {
-    set parsed [parseLine $line]
-    set ipaddr [lindex $parsed 1]
-
-    set host [lindex $parsed 3]
-    set eui64 [lindex $parsed 4]
-    set macaddr [lindex $parsed 0]
-    puts $fp1 "$host\tIN A\t$ipaddr"
-    if {$eui64} {
-        puts $fp1 "$host\tIN AAAA\t$ipv6network:[genEUI64 $macaddr]"
-    }
-
-    set revip {}
-    switch $class {
-        a {set rc 2}
-        b {set rc 1}
-        default {set rc 0}
-    }
-    for {set i $rc} {$i >= 0} {incr i -1} {
-        lappend revip [lindex [split $ipaddr "."] $i]
-    }
-    puts $fp2 "[join $revip .]\tIN PTR\t$host.$domain"
-}
-
-# prov usage -
+# proc usage -
 # 概要: 簡単なヘルプメッセージを表示する
 proc usage {} {
     global argv0
@@ -232,9 +276,6 @@ set dhcpConfigFile {}
 set forwardZoneFile {}
 set reverseIPv4ZoneFile {}
 set reverseIPv6ZoneFile {}
-set domainName {}
-set ipv6NetworkAddress {}
-set class {C}
 
 # auto Configuration
 switch -- $tcl_platform(os) {
