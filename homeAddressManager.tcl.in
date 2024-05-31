@@ -126,28 +126,69 @@ proc validIPv4addr {addr} {
 #  fp - 設定ファイル書き出し用に書き込みモードで開かれたファイルストリーム
 #  line - 入力CSVファイルの1行
 # 戻り値: なし
-proc genDHCPConf {fp line} {
-    set parsed [parsedLine $line]
-    puts $fp "Host [lindex $parsed 3] \{"
-    puts $fp "\thardware ethernet [lindex $parsed 0];"
-    outs $fp "\tfixed-address[lindex $parsed 1];"
-    puts $fp "\}"
-}
-
-# proc genForwardZoneFile -
-# 概要: ISC Bind用の正引きゾーンファイルを生成する
-proc genForwardZoneFile {fpTMPL fpZONE line domain} {
-    set parsed [parseLine $line]
-    set ipaddr [lindex $parsed 1]
-
-    set host [lindex $parsed 3]
-    set eui64 [lindex $parsed 4]
-    set macaddr [lindex $parsed 0]
-    puts $fp1 "$host\tIN A\t$ipaddr"
-    if {$eui64} {
-        puts $fp1 "$host\tIN AAAA\t$ipv6network:[genEUI64 $macaddr]"
+proc genDHCPConf {templatePath csvFile configFile} {
+    set templFile [file join $templatePath "[lindex [file split $configFile] end]".tmpl]
+    if {[catch [list open $templFile r] templ]} {
+        puts stderr $templ
+        exit 1
+    }
+    if {[catch [list open $csvFile r] csv]} {
+        puts stderr $csv
+        exit 1
+    }
+    if {[catch [list open $configFile w] config]} {
+        puts stderr $config
+        exit 1
+    }
+    while {![eof $templ]} {
+        set line [gets $templ]
+        if {[string equal {%%FIXDHCPADDRESSES%%} $line]} {
+            while {![eof $csv]} {
+                set data [gets $csv]
+                if {[regexp {^#} $data]} {
+                    continue
+                }
+                set data [split $data {,}]
+                if {4 == [llength $data]} {
+                    set host [lindex $data 3]
+                } else {
+                    set host [lindex $data 2]
+                }
+                set host [lindex [split $host {@}] 1]
+                set mac [lindex $data 0]
+                set ipv4 [lindex $data 1]
+                if {[string equal {} $host] || [string equal {} $mac] || [string equal {} $ipv4]} {
+                    continue
+                }
+                puts $config "Host $host \{"
+                puts $config "\thardware ethernet $mac;"
+                outs $config "\tfixed-address[ $ipv4;"
+                puts $config "\}"
+            }
+        } else {
+            puts $config $line
+        }
+    }
+    if {[catch [list close $config] err]} {
+        puts stderr $err
+        exit 1
+    }
+    if {[catch [list close $csv] err]} {
+        puts stderr $err
+        exit 1
+    }
+    if {[catch [list close $templ] err]} {
+        puts stderr $templ
+        exit 1
     }
 }
+
+# proc genDNSForwardFile -
+# 概要: ISC Bind用の正引きゾーンファイルを生成する
+proc genDNSForwardFile {templatePath csvFile configFile} {
+
+}
+
 
 proc genNamedConf {fp1 fp2 line class domain ipv6network]} {
     set parsed [parseLine $line]
@@ -178,25 +219,16 @@ proc genNamedConf {fp1 fp2 line class domain ipv6network]} {
 proc usage {} {
     global argv0
     puts stderr "$argv0 \\"
-    puts stderr "  --dhcp-tmplate=DHCP Template \\"
+    puts stderr "  --tmplate-path=Template Path \\"
     puts stderr "  --dhcp-configfile=Output DHCP Configuration File \\"
-    puts stderr "  --forward-zone-template=DNS Forward Template \\"
-    puts stderr "  --reverse-ipv4-zone-template=DNS IPv4 reverse Template \\"
-    puts stderr "  --reverse-ipv6-template-file=DNS IPv6 reverse Template \\"
-    puts stderr "  --forward-zone-file=Output DNS forward Zone File \\
+    puts stderr "  --forward-zone-file=Output DNS forward Zone File \\"
     puts stderr "  --reverse-ipv4-zone-file=Output DNS IPv4 reverse Zone File \\"
     puts stderr "  --reverse-ipv6-zone-file=Output DNS IPv6 reverse Zone File \\"
-    puts stderr "  --domain-name=domain name \\"
-    puts stderr "  --ipv6-network-address=IPv6 network address \\"
-    puts stderr "  --class=A|B|C"
 }
 
 # global variables:
-set dhcpTemplate {}
+set templatePath {}
 set dhcpConfigFile {}
-set forwardZoneTemplate {}
-set reverseIPv4Template {}
-set reverseIPv6Template {}
 set forwardZoneFile {}
 set reverseIPv4ZoneFile {}
 set reverseIPv6ZoneFile {}
@@ -237,20 +269,11 @@ if {[string equal "" $csvFile]} {
 }
 foreach i [lrange $argv 0 [expr [llength $argv] - 1]] {
     switch -glob -- $i {
-        --dhcp-tmplate=* {
-            regexp -- {^--dhcp-tmplate=(.+)$} $i _ dhcpTemplate
+        --tmplate-path=* {
+            regexp -- {^--tmplate-path=(.+)$} $i _ templatePath
         }
         --dhcp-configfile=* {
             regexp -- {^--dhcp-configfile=(.+)$} $i _ dhcpConfigFile
-        }
-        --forward-zone-template=* {
-            regexp -- (^--forward-zone-template=(.+)$) $i _ forwardZoneTemplate
-        }
-        --reverse-ipv4-zone-template=* {
-            regexp -- (^--reverse-ipv4-zone-template=(.+)$) $i _ reverseIPv4Template
-        }
-        --reverse-ipv6-template-file=* {
-            regexp -- (^--reverse-ipv6-template-file=(.+)$) $i _ reverseIPv6Template
         }
         --forward-zone-file=* {
             regexp -- {^--forward-zone-file=(.+)$} $i _ forwardZoneFile
@@ -273,77 +296,12 @@ foreach i [lrange $argv 0 [expr [llength $argv] - 1]] {
     }
 }
 
-# check Options
-if {![string equal {} $dhcpConfigFile] && [string equal {} $dhcpTemplate]} {
-    puts stderr "No DHCP Template. Use option --dhcp-tmplate=DHCP Template"
-    exit 1
-}
-if {![string equal {} $forwardZoneFile] && [string equal {} $forwardZoneTemplate]} {
-    puts stderr "No DNS Forward Template. Use option --forward-zone-template=DNS Forward Template"
-    exit 1
-}
-if {![string equal {} $reverseIPv4ZoneFile] && [string equal {} $reverseIPv4Template]} {
-    puts stderr "No DNS IPv4 reverse Template. Use option --reverse-ipv4-zone-template=DNS IPv4 reverse Template"
-    exit 1
-}
-if {![string equal {} $reverseIPv6ZoneFile] && [string equal {} $reverseIPv4Template]} {
-    puts stderr "No DNS IPv6 reverse Template. Use option --reverse-ipv6-zone-template=DNS IPv6 reverse Template"
-    exit 1
-}
-if {![string equal {} $reverseIPv4ZoneFile] && [string equal {} $domain]} {
-    puts stderr "No dmain name. Use option --domain=domain name"
-    exit 1
-}
-if {![string equal {} $reverseIPv6ZoneFile] && [string equal {} $ipv6NetworkAddr]} {
-    puts stderr "No IPv6 network address. Use option --ipv6-network-address=IPv6 network address"
-    exit 1
-}
-
-# main loop
-if {[catch [list open $csvFile r] fpCSV]} {
-    puts stderr $fpCSV
-    exit 1
-}
+# Generate DHCP Config File
 if {![string equal {} $dhcpConfigFile]} {
-    if {[catch [list open $dhcpTemplate r] fpDHCPTMPL]} {
-        puts stderr $fpDHCPTMPL
-        exit 1
-    }
-    if {[catch [list open $dhcpConfigFile w] fpDHCPCONFG]} {
-        puts stderr $fpDHCPCONFG
-        exit 1
-    }
+    genDHCPConf $templatePath $csvFile $dhcpConfigFile
 }
-if {![string equal {} $forwardZoneFile]} {
-    if {[catch [list open $forwardZoneTemplate r] fpFWDZONETMPL]} {
-        puts stderr $fpFWDZONETMPL
-        exit 1
-    }
-    if {[catch [list open $forwardZoneFile w] fpFWDZONEFILE]} {
-        puts stderr $fpFWDZONEFILE
-        exit 1
-    }
-}
-if {![string equal {} $reverseIPv4ZoneFile]} {
-    if {[catch [list open $reverseIPv4Template r] fpREVIPV4TMPL]} {
-        puts stderr $fpREVIPV4TMPL
-        exit 1
-    }
-    if {[catch [list open $reverseIPv4ZoneFile w] fpREVIPV4FILE]} {
-        puts stderr $fpREVIPV4FILE
-        exit 1
-    }
-}
-if {![string equal {} $reverseIPv6ZoneFile]} {
-    if {[catch [list open $reverseIPv6Template r] fpREVIPV6TMPL]} {
-        puts stderr $fpREVIPV6TMPL
-        exit 1
-    }
-    if {[catch [list open $reverseIPv6ZoneFile w] fpREVIPV6FILE]} {
-        puts stderr $fpREVIPV6FILE
-        exit 1
-    }
-}
-while {![eof $fpCSV]} {
 
+# Generate DNS Forward File
+if {![string equal {} $forwardZoneFile]} {
+    genDNSForwardFile $templatePath $csvFile $forwardZoneFile
 }
