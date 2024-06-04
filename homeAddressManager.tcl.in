@@ -61,7 +61,7 @@ proc genEUI64 {macaddr} {
     }
     set macaddr [split $macaddr ":"]
     set buf {}
-    lappend buf [format {%2x} [expr "0x[lindex $macaddr 0]" ^ 2]]
+    lappend buf [format {%02x} [expr "0x[lindex $macaddr 0]" ^ 2]]
     foreach i [lrange $macaddr 1 2] {
         lappend buf $i
     }
@@ -74,45 +74,6 @@ proc genEUI64 {macaddr} {
         lappend ret [regsub {^0{1,}} "$i$j" {}]
     }
     return [join $ret ":"]
-}
-
-# proc parseLine line -
-# 概要： CSVファイルの1行をパースして、各項目をリストにして返す。
-#    MACアドレス、IPアドレス、管理者、ホスト名情報が書式として正しいか否かを検査する。
-#    書式として正しくない場合は標準エラー出力にエラーメッセージを出力する。
-# 引数:
-#   line - CVSファイルの1行
-# 戻り値: 書式が正しい場合は、以下の情報のリスト
-#          {MACアドレス IPアドレス 管理者 ホスト名 eui64フラグ}
-#           ※eui64フラグはEUI64方式のIPv6アドレスでAAAAレコードを生成するか否かのbool値。他はすべて文字列
-#       諸記事が不正の場合は空文字列を返す
-proc parseLine {line} {
-    set buf [split $line {,}]
-    set macaddr [lindex $buf 0]
-    if {![regexp -nocase -- {^[0-9a-f]{2}([:-][0-9a-f]{2}){5}} $macaddr]} {
-        puts stderr "Invalid macaddr format: $line"
-        return
-    }
-    set ipaddr [lindex $buf 1]
-    if {![validIPv4addr $ipaddr]} {
-        puts stderr "Invalid IPAddr format: $line"
-        return
-    }
-    set eui64 0
-    set adminHost [lindex $buf 2]
-    if {[string equal "eui64" $adminHost]} {
-        set eui64 1
-        set adminHost [lindex $buf 3]
-    } elseif  {[string equal "eui64" [lindex $buf 3]]} {
-        set eui64 1
-    }
-    set admin [lindex [split $adminHost "@"] 0]
-    set host [lindex [split $adminHost "@"] 1]
-    if {[string equal "" $admin] || [string equal "" $host]} {
-        puts stderr "Invalid Admin@Hostname: $line"
-        return
-    }
-    return [list $macaddr $ipaddr $admin $host $eui64]
 }
 
 # proc validIPv4addr -
@@ -143,7 +104,7 @@ proc validIPv4addr {addr} {
 #  line - 入力CSVファイルの1行
 # 戻り値: なし
 proc genDHCPConf {templatePath csvFile configFile} {
-    set templFile [file join $templatePath "[lindex [file split $configFile] end]".tmpl]
+    set templFile [file join $templatePath "[lindex [file split $configFile] end].tmpl"]
     if {[catch [list open $templFile r] templ]} {
         puts stderr $templ
         exit 1
@@ -178,7 +139,7 @@ proc genDHCPConf {templatePath csvFile configFile} {
                 }
                 puts $config "Host $host \{"
                 puts $config "\thardware ethernet $mac;"
-                outs $config "\tfixed-address[ $ipv4;"
+                puts $config "\tfixed-address $ipv4;"
                 puts $config "\}"
             }
         } else {
@@ -199,10 +160,20 @@ proc genDHCPConf {templatePath csvFile configFile} {
     }
 }
 
+proc getCurrentSerial {zone} {
+    set ret {}
+    if {[catch [list exec dig $zone soa | egrep -v {^;|^#}] soa]} {
+        set ret [clock format [clock seconds] -format {%Y%m%d%H}]
+    } else {
+        set ret [expr [lindex $soa 6] + 1]
+    }
+    return $ret
+}
+
 # proc genDNSForwardFile -
 # 概要: ISC Bind用の正引きゾーンファイルを生成する
-proc genDNSForwardFile {templatePath csvFile configFile} {
-    set templFile [file join $templatePath "[lindex [file split $configFile] end]".tmpl]
+proc genDNSForwardFile {zone ipv6netaddr templatePath csvFile configFile} {
+    set templFile [file join $templatePath "[lindex [file split $configFile] end].tmpl"]
     if {[catch [list open $templFile r] templ]} {
         puts stderr $templ
         exit 1
@@ -215,8 +186,10 @@ proc genDNSForwardFile {templatePath csvFile configFile} {
         puts stderr $config
         exit 1
     }
+    set serial [getCurrentSerial $zone]
     while {![eof $templ]} {
         set line [gets $templ]
+        set line [regsub -all -line -- {%%SEREAL%%} $line $serial]
         if {[string equal {%%FIXDADDRESSRCODES%%} $line]} {
             while {![eof $csv]} {
                 set data [gets $csv]
@@ -231,12 +204,16 @@ proc genDNSForwardFile {templatePath csvFile configFile} {
                     set host [lindex [split [lindex $data 2] {@}] 1]
                     set ipv6addr {}
                 }
+                set macaddr [lindex $data 0]
                 set ipv4addr [lindex $data 1]
+                if {[string equal {eui64} $ipv6addr]} {
+                    set ipv6addr "$ipv6netaddr[genEUI64 $macaddr]"
+                }
                 if {[string equal {} $host] || [string equal {} $ipv4addr]} {
                     continue
                 }
                 puts $config "$host\tIN A\t$ipv4addr"
-                if {![string equal P{ $ipv6addr}]} {
+                if {![string equal {} $ipv6addr]} {
                     puts $config "$host\tIN AAAA\t$ipv6addr"
                 }
             }
@@ -255,6 +232,165 @@ proc genDNSForwardFile {templatePath csvFile configFile} {
     if {[catch [list close $templ] err]} {
         puts stderr $templ
         exit 1
+    }
+}
+
+proc getIPv4PTR {zone ipv4addr} {
+    set ipv4addr [split $ipv4addr "."]
+    if {[string equal {10.in-addr.arpa} $zone]} {
+        set ptr [lrange $ipv4addr 1 end]
+    } else {
+        set ptr [lrange $ipv4addr 2 end]
+    }
+    return [join [lreverse $ptr] {.}]
+}
+
+proc genDNSIPv4RevFile {zone domainName templatePath csvFile configFile} {
+    set templFile [file join $templatePath "[lindex [file split $configFile] end].tmpl"]
+    if {[catch [list open $templFile r] templ]} {
+        puts stderr $templ
+        exit 1
+    }
+    if {[catch [list open $csvFile r] csv]} {
+        puts stderr $csv
+        exit 1
+    }
+    if {[catch [list open $configFile w] config]} {
+        puts stderr $config
+        exit 1
+    }
+    set serial [getCurrentSerial $zone]
+    while {![eof $templ]} {
+        set line [gets $templ]
+        set line [regsub -all -line -- {%%SEREAL%%} $line $serial]
+        if {[string equal {%%FIXIPV4PTRRECORDES%%} $line]} {
+            while {![eof $csv]} {
+                set data [gets $csv]
+                if {[regexp {^#} $data]} {
+                    continue
+                }
+                set data [split $data {,}]
+                if {4 == [llength $data]} {
+                    set host [lindex [split [lindex $data 3] {@}] 1]
+                } else {
+                    set host [lindex [split [lindex $data 2] {@}] 1]
+                }
+                set ipv4addr [lindex $data 1]
+                if {[string equal {} $host] || [string equal {} $ipv4addr]} {
+                    continue
+                }
+                puts $config "[getIPv4PTR $zone $ipv4addr]\tIN PTR\t$host.$domainName."
+            }
+        } else {
+            puts $config $line
+        }
+    }
+    if {[catch [list close $config] err]} {
+        puts stderr $err
+        exit 1
+    }
+    if {[catch [list close $csv] err]} {
+        puts stderr $err
+        exit 1
+    }
+    if {[catch [list close $templ] err]} {
+        puts stderr $templ
+        exit 1
+    }
+}
+
+proc getIPv6PTR {addr} {
+    set buf {}
+    foreach i [lrange [split $addr {:}] 4 end] {
+        if {[string equal {} $i]} {
+            set buf [format {%s0000} $buf]
+        } else {
+            set buf "$buf[format {%04x} 0x$i]"
+        }
+    }
+    set buf [join [lreverse [split $buf {}]] {.}]
+    return $buf
+}
+
+proc genDNSIPv6RevFile {zone ipv6netaddr domainName templatePath csvFile configFile} {
+    set templFile [file join $templatePath "[lindex [file split $configFile] end].tmpl"]
+    if {[catch [list open $templFile r] templ]} {
+        puts stderr $templ
+        exit 1
+    }
+    if {[catch [list open $csvFile r] csv]} {
+        puts stderr $csv
+        exit 1
+    }
+    if {[catch [list open $configFile w] config]} {
+        puts stderr $config
+        exit 1
+    }
+    set serial [getCurrentSerial $zone]
+    while {![eof $templ]} {
+        set line [gets $templ]
+        set line [regsub -all -line -- {%%SEREAL%%} $line $serial]
+        if {[string equal {%%FIXIPV6PTRRECORDES%%} $line]} {
+            while {![eof $csv]} {
+                set data [gets $csv]
+                if {[regexp {^#} $data]} {
+                    continue
+                }
+                set data [split $data {,}]
+                if {4 == [llength $data]} {
+                    set host [lindex [split [lindex $data 3] {@}] 1]
+                    set ipv6addr [lindex $data 2]
+                } else {
+                    set host [lindex [split [lindex $data 2] {@}] 1]
+                    set ipv6addr {}
+                }
+                set macaddr [lindex $data 0]
+                if {[string equal {eui64} $ipv6addr]} {
+                    set ipv6addr "$ipv6netaddr[genEUI64 $macaddr]"
+                }
+                puts "DEBUG: host = $host, ipv6addr = $ipv6addr"
+                if {[string equal {} $host] || [string equal {} $ipv6addr]} {
+                    continue
+                }
+                puts $config "[getIPv6PTR $ipv6addr]\tIN PTR\t$host.$domainName."
+            }
+        } else {
+            puts $config $line
+        }
+    }
+    if {[catch [list close $config] err]} {
+        puts stderr $err
+        exit 1
+    }
+    if {[catch [list close $csv] err]} {
+        puts stderr $err
+        exit 1
+    }
+    if {[catch [list close $templ] err]} {
+        puts stderr $templ
+        exit 1
+    }
+}
+
+# proc fileNewer -
+# 概要: file1がfile2よりも「新しい」ならば真を返す。
+#       比較はmtimeで行う。
+#       file1が存在しない場合偽を返す。file2が存在しない場合は真を返す
+proc fileNewer {file1 file2} {
+    if {![file exists $file1]} {
+        return 0
+    } else {
+        set mtime1 [file mtime $file1]
+    }
+    if {![file exists $file2]} {
+        return 1
+    } else {
+        set mtime2 [file mtime $file2]
+    }
+    if {$mtime1 > $mtime2} {
+        return 1
+    } else {
+        return 0
     }
 }
 
@@ -310,6 +446,9 @@ if {[string equal "" $csvFile]} {
 }
 foreach i [lrange $argv 0 [expr [llength $argv] - 1]] {
     switch -glob -- $i {
+        --help {
+            usage
+        }
         --tmplate-path=* {
             regexp -- {^--tmplate-path=(.+)$} $i _ templatePath
         }
@@ -338,11 +477,24 @@ foreach i [lrange $argv 0 [expr [llength $argv] - 1]] {
 }
 
 # Generate DHCP Config File
-if {![string equal {} $dhcpConfigFile]} {
+if {![string equal {} $dhcpConfigFile] && [fileNewer $csvFile $dhcpConfigFile]} {
     genDHCPConf $templatePath $csvFile $dhcpConfigFile
 }
 
 # Generate DNS Forward File
-if {![string equal {} $forwardZoneFile]} {
-    genDNSForwardFile $templatePath $csvFile $forwardZoneFile
+if {![string equal {} $forwardZoneFile] && [fileNewer $csvFile $forwardZoneFile]} {
+    genDNSForwardFile $domainName $ipv6NetAddr $templatePath $csvFile $forwardZoneFile
+}
+
+# Generate DNS IPv4 Reverse File
+if {![string equal {} $reverseIPv4ZoneFile] && [fileNewer $csvFile $reverseIPv4ZoneFile]} {
+    genDNSIPv4RevFile $ipv4RevZoneName $domainName $templatePath $csvFile $reverseIPv4ZoneFile
+}
+
+# Generate DNS IPv6 Reverse File
+puts stderr "DEBUG: IPv6 Rev"
+puts stderr "DEBUG: fileNewer $csvFile $reverseIPv6ZoneFile => [fileNewer $csvFile $reverseIPv6ZoneFile]"
+if {![string equal {} $reverseIPv6ZoneFile] && [fileNewer $csvFile $reverseIPv6ZoneFile]} {
+    puts stderr "DEBUG: Call genDNSIPv6RevFile"
+    genDNSIPv6RevFile $ipv6RevZoneName $ipv6NetAddr $domainName $templatePath $csvFile $reverseIPv6ZoneFile
 }

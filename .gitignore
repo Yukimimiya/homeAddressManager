@@ -2,3 +2,7 @@
 .DS_Store
 *.tmpl
 homeAddressManager.tcl
+dhcpd.conf
+db.example.jp
+db.ipv4.reverse
+db.ipv6.reverse

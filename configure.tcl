@@ -388,6 +388,7 @@ proc determinIPv4RevZoneName {ipv4NetAddr} {
             exit 1
         }
     }
+    return $revZone
 }
 
 proc findMName {zone} {
@@ -420,6 +421,47 @@ proc findNSRecords {zone} {
     return [join $buf "\n"]
 }
 
+proc findIPv6NetworkAddress {} {
+    global tcl_platform
+    switch $tcl_platform(os) {
+        Darwin -
+        FreeBSD {
+            if {[catch [list exec ifconfig | grep {inet6 } | grep -v {inet6 fe80:} | grep -v {inet6 ::1}] err]} {
+                puts stderr "Can not parse ifconfig output: $err"
+                exit 1
+            }
+            if {![regexp {\s+inet6 ([0-9A-Fa-f]{1,4}([:]{1,2}[0-9A-Fa-f]{1,4}){1,7}) prefixlen ([0-9]+)\s} $err _ ipv6netaddr _ prefixlen]} {
+                puts stderr "Can not parse ifconfig output: $err"
+                exit 1
+            }
+            if {![string equal {64} $prefixlen]} {
+                puts stderr "Does not support prefixlen: $prefixlen"
+                exit 1
+            }
+            set ipv6netaddr [getIPv6Netaddr $ipv6netaddr]
+        }
+        Linux {
+            if {[catch [list exec ip a | grep {inet6 } | grep -v {inet6 fe80:} | grep -v {inet6 ::1}] err]} {
+                puts stderr "Can not parse ip a output: $err"
+                exit 1
+            }
+            if {![regexp {\s+inet6 ([0-9A-Fa-f]{1,4}([:]{1,2}[0-9A-Fa-f]{1,4}){1,7})/([0-9]+)\s} $err _ ipv6netaddr _ prefixlen]} {
+                puts stderr "Can not parse ifconfig output: $err"
+                exit 1
+            }
+            if {![string equal {64} $prefixlen]} {
+                puts stderr "Does not support prefixlen: $prefixlen"
+                exit 1
+            }
+            set ipv6netaddr [getIPv6Netaddr $ipv6netaddr]
+        }
+        default {
+            puts stderr "Unsupported OS: $tcl_platform(os)"
+            exit 1
+        }
+    }
+    return $ipv6netaddr
+}
 
 set domainName {}
 set dnsServers {}
@@ -548,7 +590,7 @@ if {[string equal {} $ipv4DefaultRouter]} {
     set ipv4DefaultRouter [findIPv4Defaultroute ]
 }
 if {[string equal {} $ipv4RevZoneName]} {
-    set revZoneName [determinIPv4RevZoneName $ipv4NetAddr]
+    set ipv4RevZoneName [determinIPv4RevZoneName $ipv4NetAddr]
 }
 if {[string equal {} $mName]} {
     set mName [findMName $domainName]
