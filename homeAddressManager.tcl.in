@@ -348,7 +348,6 @@ proc genDNSIPv6RevFile {zone ipv6netaddr domainName templatePath csvFile configF
                 if {[string equal {eui64} $ipv6addr]} {
                     set ipv6addr "$ipv6netaddr[genEUI64 $macaddr]"
                 }
-                puts "DEBUG: host = $host, ipv6addr = $ipv6addr"
                 if {[string equal {} $host] || [string equal {} $ipv6addr]} {
                     continue
                 }
@@ -492,9 +491,6 @@ if {![string equal {} $reverseIPv4ZoneFile] && [fileNewer $csvFile $reverseIPv4Z
 }
 
 # Generate DNS IPv6 Reverse File
-puts stderr "DEBUG: IPv6 Rev"
-puts stderr "DEBUG: fileNewer $csvFile $reverseIPv6ZoneFile => [fileNewer $csvFile $reverseIPv6ZoneFile]"
 if {![string equal {} $reverseIPv6ZoneFile] && [fileNewer $csvFile $reverseIPv6ZoneFile]} {
-    puts stderr "DEBUG: Call genDNSIPv6RevFile"
     genDNSIPv6RevFile $ipv6RevZoneName $ipv6NetAddr $domainName $templatePath $csvFile $reverseIPv6ZoneFile
 }
