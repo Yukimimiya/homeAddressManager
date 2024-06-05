@@ -11,26 +11,14 @@ exit 1
 #   DHCP固定アドレス払い出し設定を含めた設定ファイル、BIND用の正引き/逆引きゾーンファ
 #   イルを生成出力、必要に応じて、dhcpd/namedの再起動を行う。
 # 引数:
-#  --dhcp-tmplate=DHCP設定テンプレート
-#   DHCP設定テンプレートファイル
 #  --dhcp-configfile=DHCP設定ファイル
 #   出力設定ファイルパス。指定された場合、生成を行う。
-#  --forward-zone-template=正引きテンプレート
-#   正引きテンプレートファイル
-#  --reverse-ipv4-zone-template=IPv4逆引きテンプレート
-#   IPv4逆引きテンプレートファイル
-#  --reverse-ipv6-template-file=IPv6逆引きテンプレート
-#   IPv6逆引きテンプレートファイル
 #  --forward-zone-file=正引きゾーンファイル
 #   出力正引きゾーンファイルパス。指定された場合、生成を行う。
 #  --reverse-ipv4-zone-file=IPv4逆引きゾーンファイル
 #   出力IPv4逆引きゾーンファイルパス。指定された場合、生成を行う。
 #  --reverse-ipv6-zone-file=IPv6逆引きゾーンファイル
 #   出力IPv6逆引きゾーンファイルパス。指定された場合、生成を行う。
-#  --domain-name=ドメイン名
-#  --ipv6-network-address=IPv6ネットワークアドレス
-#  --class=A|B|C
-#   IPv4アドレスのクラス。A(/8)、B(/16)、C(/24)。デフォルトC
 
 # configurations
 set domainName {%DOMAINNAME%}
@@ -74,26 +62,6 @@ proc genEUI64 {macaddr} {
         lappend ret [regsub {^0{1,}} "$i$j" {}]
     }
     return [join $ret ":"]
-}
-
-# proc validIPv4addr -
-# 概要: 引数がIPv4アドレスとして解釈できる文字列であるならば真を、それ以外の場合は偽を返す
-# 引数: IPv4アドレス文字列
-# 戻り値: 判定結果真偽値
-proc validIPv4addr {addr} {
-    set ret 1
-    set addr [split $addr "."]
-    if {[llength $addr] != 4} {
-        return 0
-    }
-    foreach a $addr {
-        set a [scan $a "%d"]
-        if {[string equal {} $a] || $a < 0 || $a > 255} {
-            set ret 0
-            break
-        }
-    }
-    return $ret
 }
 
 # proc genDHCPConf -
@@ -403,6 +371,7 @@ proc usage {} {
     puts stderr "  --forward-zone-file=Output DNS forward Zone File \\"
     puts stderr "  --reverse-ipv4-zone-file=Output DNS IPv4 reverse Zone File \\"
     puts stderr "  --reverse-ipv6-zone-file=Output DNS IPv6 reverse Zone File \\"
+    puts stderr "  csvfile"
 }
 
 # global variables:
@@ -415,20 +384,20 @@ set reverseIPv6ZoneFile {}
 # auto Configuration
 switch -- $tcl_platform(os) {
     Linux {
-        set dhcpRestartCmd {systemctl restart isc-dhcp-server}
-        set bindRestartCmd {systemctl restart named}
+        set dhcpRestartCmd {exec systemctl restart isc-dhcp-server}
+        set bindRestartCmd {exec systemctl restart named}
     }
     Darwin {
         # for using "sudo brew ...", edit /etc/sudoers as following:
         # %admin          ALL = (ALL) ALL
         # ->
         # %admin          ALL = (ALL) NOPASSWD: ALL
-        set dhcpRestartCmd {sudo brew services restart isc-dhcp}
-        set bindRestartCmd {sudo brew services restart named}
+        set dhcpRestartCmd {exec sudo brew services restart isc-dhcp}
+        set bindRestartCmd {exec sudo brew services restart named}
     }
     FreeBSD {
-        set dhcpRestartCmd {service isc-dhcpd restart}
-        set bindRestartCmd {service named restart}
+        set dhcpRestartCmd {exec service isc-dhcpd restart}
+        set bindRestartCmd {exec service named restart}
     }
     default {
         puts stderr "Unknown OS: $tcl_platform(os)"
@@ -478,19 +447,35 @@ foreach i [lrange $argv 0 [expr [llength $argv] - 1]] {
 # Generate DHCP Config File
 if {![string equal {} $dhcpConfigFile] && [fileNewer $csvFile $dhcpConfigFile]} {
     genDHCPConf $templatePath $csvFile $dhcpConfigFile
+    if {[catch $dhcpRestartCmd err]} {
+	puts stderr $err
+	exit 1
+    }
 }
 
 # Generate DNS Forward File
 if {![string equal {} $forwardZoneFile] && [fileNewer $csvFile $forwardZoneFile]} {
     genDNSForwardFile $domainName $ipv6NetAddr $templatePath $csvFile $forwardZoneFile
+    if {[catch $bindRestartCmd err]} {
+	puts stderr $err
+	exit 1
+    }
 }
 
 # Generate DNS IPv4 Reverse File
 if {![string equal {} $reverseIPv4ZoneFile] && [fileNewer $csvFile $reverseIPv4ZoneFile]} {
     genDNSIPv4RevFile $ipv4RevZoneName $domainName $templatePath $csvFile $reverseIPv4ZoneFile
+    if {[catch $bindRestartCmd err]} {
+        puts stderr $err
+        exit 1
+    }
 }
 
 # Generate DNS IPv6 Reverse File
 if {![string equal {} $reverseIPv6ZoneFile] && [fileNewer $csvFile $reverseIPv6ZoneFile]} {
     genDNSIPv6RevFile $ipv6RevZoneName $ipv6NetAddr $domainName $templatePath $csvFile $reverseIPv6ZoneFile
+    if {[catch $bindRestartCmd err]} {
+        puts stderr $err
+        exit 1
+    }
 }
